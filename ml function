@@ -1,0 +1,13 @@
+def ml_model(company_name) -> str:
+    """Use this function to get a score and a list of features given by a Machine Learning model
+
+    Args:
+    str: company_name (Name of the company to calculate the risk score for)
+    
+    Returns:
+        json: List of features influencing the score and Model Score
+        
+    """
+    ml_data = {"company_name": company_name, "features_list": ["Total Debt", "Net Revenue", "Asset Turnover Ratio"], "score": 65.11}
+
+    return json.dumps(ml_data) 
