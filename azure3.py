@@ -9,7 +9,6 @@ import re
 warnings.filterwarnings("ignore")
 load_dotenv()
 
-
 # 1) Azure OpenAI client setup
 client = AzureOpenAI(
     azure_endpoint   = os.environ["AZURE_OPENAI_ENDPOINT"],
@@ -17,7 +16,7 @@ client = AzureOpenAI(
     api_key          = os.environ["AZURE_OPENAI_API_KEY"],
     api_version      = os.environ["API_VERSION_GA"],
 )
-print(" AzureOpenAI client initialized")
+print("AzureOpenAI client initialized")
 
 # 2) Paths
 INPUT_PATH  = "output/Company_Financials_Cleaned.xlsx"
@@ -25,20 +24,28 @@ OUTPUT_PATH = "output/Company_Financials_Synthetic_First5.xlsx"
 
 # 3) Load first 5 rows
 df_full = pd.read_excel(INPUT_PATH)
-df5     = df_full.iloc[:100].reset_index(drop=True)
+df5     = df_full.iloc[:5].reset_index(drop=True)
 print("\n=== INPUT (first 5 rows) ===")
 print(df5)
 
 # 4) Prepare features
-features = df5.drop(columns=["Company","Industry","Sector","Financial Year","Net Income Continuous Operations", 
-                             "Total Revenue", "Stockholders Equity", "Total Assets", "Current Assets", 
-                             "Current Liabilities", "Inventory", "Total Debt","Interest Expense","EBIT"], errors="ignore")
+features = df5.drop(columns=[
+    "Company", "Industry", "Sector", "Financial Year", 
+    "Net Income Continuous Operations", "Total Revenue", 
+    "Stockholders Equity", "Total Assets", "Current Assets", 
+    "Current Liabilities", "Inventory", "Total Debt", 
+    "Interest Expense", "EBIT"
+], errors="ignore")
+
+# Add new columns with NA
 new_columns = ["Loan Value", "Collateral Value", "Loan Tenure", "Credit Score", "Risk Score"]
 for col in new_columns:
     df5[col] = pd.NA
+print("\n=== With New Columns ===")
 print(df5)
 
-str_df = features.to_string()
+# Convert features dataframe to string
+str_df = features.to_string(index=False)
 
 # 5) JSON parser
 def parse_json_response(text: str):
@@ -50,7 +57,7 @@ def parse_json_response(text: str):
         return json.loads(m.group(0)) if m else None
 
 # 6) Your exact prompt template (braces escaped)
-prompt_template = f"""{
+prompt_template = f"""
 You are a financial risk expert responsible for evaluating a company's loan risk based on their financial data. Your task is to generate a "Risk Score" that ranges from 0 to 100, where:
 
     - A Risk Score of 0 represents **minimum risk** and indicates a financially stable company.
@@ -114,30 +121,11 @@ You are a financial risk expert responsible for evaluating a company's loan risk
     collateral should be at realistic (₹10,00,000 to ₹55,00,00,000), 
     loan tenure should be realistic (6 to 240 months)
     credit score to be realistic between (300 to 900)
-   ### Calculating the Risk Score:
-Your risk score should be based on the combined analysis of all features.
+   
+    ### Your Response Format:
+    Respond ONLY with a JSON list like this:
 
-Positive indicators (reduce risk): Net Profit Margin, ROE, ROA, Asset Turnover, Current Ratio, Interest Coverage.  
-Negative indicators (increase risk): Debt, Liabilities, Interest Expense, Debt-to-Equity, Debt-to-Asset.
 
-Consider:
-- If collateral > loan value -> Risk Score between 0-10
-- If loan << Total Revenue and Assets -> Risk Score between 0-10
-- Otherwise increase risk appropriately.
-
-### Final Instructions:
-Generate the loan and risk details based on these features:
-- Loan value: ₹10,00,000 to ₹50,00,00,000
-- Collateral value: ₹10,00,000 to ₹55,00,00,000
-- Loan tenure: 6 to 240 months
-- Credit score: 300 to 900
-
-Introduce reasonable variations across companies.
-
-### Your Response Format:
-Respond ONLY with a JSON list like this:
-
-[
     {{
         "Loan Value": 10000000,
         "Collateral Value": 15000000,
@@ -164,82 +152,73 @@ Respond ONLY with a JSON list like this:
     }}
 
 
-]
+
 No extra text.
 
 ### Financial Features Table:
-{str_df}}
+{str_df}
 """.format(str_df=str_df)
 
-resp = client.chat.completions.create(
-        model    = os.environ["AZURE_OPENAI_DEPLOYMENT"],
-        messages = [
-            {"role":"system", "content":"You generate synthetic loan & risk data."},
-            {"role":"user",   "content":prompt_template}
-        ],
-        temperature=0.6,
-        max_tokens = 800
-    )
-raw = resp.choices[0].message.content
-print(f"[Raw response]\n{raw}")
 
-# 8) Parse the JSON response
-data = parse_json_response(raw)
-if data:
-    # Add synthetic data to the dataframe
-    synthetic_df = pd.json_normalize(data)
-    df5.update(synthetic_df)
-    
-    # 9) Save updated dataframe to Excel
-    df5.to_excel(OUTPUT_PATH, index=False)
-    print(f"Output saved to {OUTPUT_PATH}")
-else:
-    print("Failed to parse the response.")
 
-# 7) LLM call
-# def generate_synthetic(fin_dict):
-#     fin_json = json.dumps(fin_dict, indent=2)
-#     prompt = prompt_template.format(financials=fin_json)
-#     resp = client.chat.completions.create(
-#         model    = os.environ["AZURE_OPENAI_DEPLOYMENT"],
-#         messages = [
-#             {"role":"system", "content":"You generate synthetic loan & risk data."},
-#             {"role":"user",   "content":prompt}
-#         ],
-#         temperature=0.6,
-#         max_tokens = 800
-#     )
-#     raw = resp.choices[0].message.content
-#     print(f"[Raw response]\n{raw}")
-#     parsed = parse_json_response(raw)
-#     print(f"[Parsed JSON]\n{parsed}")
-#     return parsed
-
-# # 8) Loop & collect
-# synthetic_rows = []
-# for idx, row in features.iterrows():
-#     print(f"\n>>> Processing row {idx}")
-#     res = generate_synthetic(row.to_dict())
-#     if not res:
-#         print(f" Row {idx} failed.")
-#         res = {
-#             "Loan Value": None,
-#             "Collateral Value": None,
-#             "Loan Tenure (Months)": None,
-#             "Loan to Collateral Ratio": None,
-#             "Credit Score": None,
-#             "Risk Score": None,
-#             "Explanation": "Generation failed.",
-#             "Feature Impact Weightage": {}
-#         }
-#     synthetic_rows.append(res)
-
-# # 9) Merge & save
-# syn_df = pd.DataFrame(synthetic_rows)
-# final = pd.concat([df5, syn_df], axis=1)
-# print("\n=== FINAL MERGED DF ===")
-# print(final)
-
-# os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-# final.to_excel(OUTPUT_PATH, index=False)
-# print(f"\n Saved output to {OUTPUT_PATH}")
+# 7) LLM call (ASYNC)
+async def generate_synthetic(fin_dict):
+    fin_json = json.dumps(fin_dict, indent=2)
+    prompt = PROMPT_TEMPLATE.format(financials=fin_json)
+ 
+try:
+resp = await client.chat.completions.create(
+            model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+            messages=[
+                {"role": "system", "content": "You generate synthetic loan & risk data."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.6,
+            max_tokens=800
+        )
+        raw = resp.choices[0].message.content
+        parsed = parse_json_response(raw)
+        return parsed
+    except Exception as e:
+        print(f"Error generating synthetic data: {e}")
+        return None
+ 
+# 8) Main processing loop (ASYNC)
+async def main():
+    synthetic_rows = []
+ 
+    tasks = []
+    for idx, row in features.iterrows():
+        print(f"Scheduling row {idx}")
+        task = generate_synthetic(row.to_dict())
+        tasks.append(task)
+ 
+    results = await asyncio.gather(*tasks)
+ 
+    for idx, res in enumerate(results):
+        if not res:
+            print(f"Row {idx} failed.")
+            res = [{
+                "Loan Value": None,
+                "Collateral Value": None,
+                "Loan Tenure (Months)": None,
+                "Credit Score": None,
+                "Risk Score": None,
+                "Explanation": "Generation failed."
+            }]
+        synthetic_rows.append(res[0])  # Only first dict if response is list
+ 
+    syn_df = pd.DataFrame(synthetic_rows)
+    final = pd.concat([df5, syn_df], axis=1)
+ 
+    print("\n=== FINAL MERGED DF ===")
+    print(final)
+ 
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    final.to_excel(OUTPUT_PATH, index=False)
+    print(f"\nSaved output to {OUTPUT_PATH}")
+ 
+if __name__ == "__main__":
+asyncio.run(main())
+ 
+ 
