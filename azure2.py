@@ -1,67 +1,93 @@
-import random
+prompt_template = """
+You are a financial risk expert responsible for evaluating a company's loan risk based on their financial data. Your task is to generate unique synthetic financial data for each company, including:
 
-# Function to simulate company financial data with varying risk and loan characteristics
-def generate_company_data(num_rows=50):
-    company_data = []
-    
-    for _ in range(num_rows):
-        # Randomly simulate financial data for each company
-        total_assets = random.randint(10_000_000, 100_000_000)  # Total assets between ₹1 Cr and ₹100 Cr
-        net_income = random.randint(-50_000_000, 50_000_000)  # Net income could be negative or positive
-        equity = random.randint(5_000_000, 50_000_000)  # Stockholders' equity between ₹50 Lakhs and ₹5 Cr
-        total_debt = random.randint(1_000_000, 30_000_000)  # Debt between ₹10 Lakhs and ₹3 Cr
-        current_liabilities = random.randint(500_000, 15_000_000)  # Current liabilities from ₹5 Lakhs to ₹1.5 Cr
-        EBIT = random.randint(-10_000_000, 30_000_000)  # EBIT from -₹1 Cr to ₹3 Cr
-        current_assets = random.randint(2_000_000, 15_000_000)  # Current assets from ₹20 Lakhs to ₹1.5 Cr
-        net_profit_margin = random.uniform(-5, 20)  # Profit margin between -5% to 20%
-        return_on_equity = random.uniform(-5, 25)  # ROE between -5% to 25%
-        return_on_assets = random.uniform(-5, 20)  # ROA between -5% to 20%
-        asset_turnover_ratio = random.uniform(0, 5)  # Asset turnover between 0 and 5
-        current_ratio = random.uniform(0.5, 3)  # Current ratio between 0.5 and 3
-        interest_expense = random.randint(100_000, 5_000_000)  # Interest expense between ₹1 Lakh and ₹50 Lakhs
-        debt_equity_ratio = random.uniform(0.5, 3)  # Debt to equity ratio between 0.5 and 3
-        debt_to_asset_ratio = random.uniform(0.2, 0.9)  # Debt to asset ratio between 0.2 and 0.9
-        interest_coverage_ratio = random.uniform(1, 6)  # Interest coverage ratio between 1 and 6
-        
-        # Calculate Risk Score (based on an inverse relation to financial health)
-        risk_score = 0
-        if net_income < 0: risk_score += 20  # Net income loss increases risk
-        if total_debt > 20_000_000: risk_score += 15  # High debt increases risk
-        if equity < 10_000_000: risk_score += 15  # Low equity increases risk
-        if current_liabilities > current_assets: risk_score += 10  # Liquidity issue increases risk
-        if EBIT < 0: risk_score += 10  # Negative EBIT increases risk
-        if net_profit_margin < 0: risk_score += 5  # Negative profit margin increases risk
-        
-        # Simulate loan value, collateral value, and loan tenure
-        loan_value = min(50000000, max(1000000, total_assets * 0.1 + net_income * 0.03))
-        collateral_value = min(55000000, max(1000000, equity * 0.8))
-        loan_tenure = random.randint(12, 240)  # Loan tenure between 1 to 20 years
-        
-        # Loan to Collateral ratio
-        loan_to_collateral_ratio = loan_value / collateral_value
-        
-        # Credit score (inversely related to risk score)
-        credit_score = max(300, 800 - risk_score)
-        
-        # Explanation for risk score
-        explanation = f"Risk score is based on financial health. Net income: {net_income}, Debt: {total_debt}, Equity: {equity}, Liquidity: {current_liabilities - current_assets}, Profit margin: {net_profit_margin}%"
-        
-        # Create the company row with generated values
-        company_data.append({
-            "Loan Value": loan_value,
-            "Collateral Value": collateral_value,
-            "Loan Tenure (Months)": loan_tenure,
-            "Loan to Collateral Ratio": round(loan_to_collateral_ratio, 3),
-            "Credit Score": credit_score,
-            "Risk Score": risk_score,
-            "Explanation": explanation
-        })
-    
-    return company_data
+    - A **Risk Score** that ranges from 0 to 100, where:
+        - A **Risk Score of 0** represents **minimum risk** and indicates a financially stable company.
+        - A **Risk Score of 100** represents **maximum risk** and indicates a financially unstable company.
 
-# Generate 50 rows of simulated company data
-company_data = generate_company_data(num_rows=50)
+    The higher the risk score, the greater the likelihood that the company may default on the loan.
 
-# Print the generated data for verification
-for company in company_data:
-    print(company)
+    ### Input Features to Consider:
+    Below are the financial features provided. These features help assess the company's financial health, loan eligibility, and associated risk:
+
+    1. **Net Income Continuous Operations**: 
+        - A higher value indicates profitability and financial health.
+        - **Impact on Risk**: Higher values reduce risk.
+
+    2. **Total Revenue**:
+        - A higher revenue suggests strong operations, reducing risk.
+
+    3. **Stockholders' Equity**:
+        - A higher equity reduces risk, indicating financial strength.
+
+    4. **Total Debt**:
+        - Higher debt increases the risk of default.
+
+    5. **Current Liabilities**:
+        - Higher current liabilities suggest potential liquidity issues, increasing risk.
+
+    6. **EBIT**:
+        - A higher EBIT usually lowers risk due to strong earnings performance.
+
+    7. **Current Assets**:
+        - More current assets reduce the risk by helping manage short-term obligations.
+
+    8. **Total Assets**:
+        - A higher value in assets generally reduces risk.
+
+    9. **Net Profit Margin (%)**:
+        - A higher profit margin reduces risk.
+
+    10. **Return on Equity (ROE) (%)**:
+        - High ROE reduces risk due to efficient use of equity.
+
+    11. **Return on Assets (ROA) (%)**:
+        - A high ROA reduces risk as it shows efficient use of assets.
+
+    12. **Asset Turnover Ratio**:
+        - A higher ratio indicates better asset utilization and reduces risk.
+
+    13. **Current Ratio**:
+        - A higher current ratio reduces the risk of defaulting on short-term obligations.
+
+    14. **Interest Expense**:
+        - Higher interest expenses increase risk due to debt servicing costs.
+
+    15. **Debt Equity Ratio**:
+        - A higher ratio increases financial risk.
+
+    16. **Debt To Asset Ratio**:
+        - A higher ratio increases the company’s risk of default.
+
+    17. **Interest Coverage Ratio**:
+        - A higher ratio reduces risk by ensuring the company can meet interest payments.
+
+    ### Calculating the Risk Score:
+    The higher the values of indicators like **Net Income**, **Revenue**, **Stockholders' Equity**, **EBIT**, **Net Profit Margin**, **ROE**, and **ROA**, the lower the risk score will be.
+    Conversely, **Total Debt**, **Current Liabilities**, **Interest Expense**, **Debt-to-Equity**, and **Debt-to-Asset ratios** are negative indicators that increase the risk score.
+
+    ### Unique Loan and Risk Data:
+    Based on the financial features of each company, generate the following synthetic financial data:
+
+    1. **Loan Value**: A realistic loan value ranging from ₹10,00,000 to ₹50 Crore.
+    2. **Collateral Value**: A realistic collateral value ranging from ₹10,00,000 to ₹55 Crore.
+    3. **Loan Tenure**: A loan tenure between 6 to 240 months.
+    4. **Loan to Collateral Ratio**: The ratio of Loan Value to Collateral Value.
+    5. **Credit Score**: A realistic credit score ranging from 300 to 850.
+    6. **Risk Score**: A risk score between 0 and 100, reflecting the company's loan risk.
+    7. **Explanation**: An explanation of how the financial data impacts the loan and risk scores.
+
+    Ensure the values for each company are distinct, based on the financial data provided for each company. The features will vary between companies, so generate different values for each row based on the provided information.
+
+    ### Response Format:
+    Respond ONLY with JSON in the following format:
+    {
+        "Loan Value": 10000000,
+        "Collateral Value": 15000000,
+        "Loan Tenure (Months)": 120,
+        "Loan to Collateral Ratio": 0.666,
+        "Credit Score": 750,
+        "Risk Score": 20,
+        "Explanation": "The company has strong profitability and moderate debt, leading to a good credit score and low risk."
+    }
+"""
