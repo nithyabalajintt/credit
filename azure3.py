@@ -165,7 +165,7 @@ def string_to_dataframe(raw, delimiter='|', names=cols):
     df = pd.read_csv(data,names=cols)
 
     return df
-
+    
 # 9) Convert synthetic data to DataFrame using string_to_dataframe function
 df_synthetic = string_to_dataframe(raw)  
  
