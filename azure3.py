@@ -43,14 +43,7 @@ print(features)
 
 str_df = features.to_string()
 
-# 5) JSON parser
-def parse_json_response(text: str):
-    txt = text.strip().strip("```")
-    try:
-        return json.loads(txt)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", txt, re.DOTALL)
-        return json.loads(m.group(0)) if m else None
+
 
 # 6) Prompt
 prompt_template = f"""
@@ -113,8 +106,8 @@ You are a financial risk expert responsible for evaluating a company's loan risk
 
     ### Final Instructions:
     Generate the loan and risk details based on these features. 
-    The loan value should be realistic (₹10,00,000 to ₹50,00,00,000), 
-    collateral should be at realistic (₹10,00,000 to ₹55,00,00,000), 
+    The loan value should be realistic (₹1000000 to ₹500000000), 
+    collateral should be at realistic (₹1000000 to ₹550000000), 
     loan tenure should be realistic (6 to 240 months)
     credit score to be realistic between (300 to 900)
     
@@ -125,7 +118,10 @@ You are a financial risk expert responsible for evaluating a company's loan risk
     where the colalteral value is greter than the loan value, the risk score will be 0-10 and vice versa
     if the loan amount is very less than the Total Revenue and Total Assest - risk score will be 0-10 and vice versa
     So give data simiar to these use cases across the features and range.
-     
+
+    Separate the column names by '|'  
+    dont give additional commentary, only give the columns and the numerical values
+    create a table with columns and their respective values that can be saved in a csv file.
    
 """.format(str_df=str_df)
 
@@ -141,11 +137,8 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
 
-
-synthetic_data = parse_json_response(raw)
- 
-
-def string_to_dataframe(synthetic_data, delimiter=',', header=None):
+cols=list(features.columns)
+def string_to_dataframe(raw, delimiter='|', names=cols):
 
     """
 
@@ -155,7 +148,7 @@ def string_to_dataframe(synthetic_data, delimiter=',', header=None):
 
         data_string (str): The string data.
 
-        delimiter (str, optional): The delimiter separating values. Defaults to ','.
+        delimiter (str, optional): The delimiter separating values. Defaults to '|'.
 
         header (list, optional): List of column names. If None, it infers from the first row or assigns default integer indices.
  
@@ -165,14 +158,16 @@ def string_to_dataframe(synthetic_data, delimiter=',', header=None):
 
     """
 
-    data = io.StringIO(synthetic_data)
-
-    df = pd.read_csv(data, sep=delimiter, header=header)
+    data = io.StringIO(raw)
+    print(data)
+    print(list(features.columns))
+   
+    df = pd.read_csv(data,names=cols)
 
     return df
 
 # 9) Convert synthetic data to DataFrame using string_to_dataframe function
-df_synthetic = string_to_dataframe(synthetic_data)  
+df_synthetic = string_to_dataframe(raw)  
  
 # Save updated dataframe to Excel
 df_synthetic.to_excel(OUTPUT_PATH, index=False)  # Saving the DataFrame to Excel
