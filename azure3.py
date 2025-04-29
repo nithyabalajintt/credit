@@ -139,11 +139,12 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
 
-syn_df = pd.DataFrame(raw)
+parsed = parse_json_response(raw)
+syn_df = pd.DataFrame(parsed)
 
 # 7) Merge & save
 # Merge the synthetic generated columns back into the original df5
-for col in str_df:
+for col in new_columns:
     if col in syn_df.columns:
         df5[col] = syn_df[col]
  
