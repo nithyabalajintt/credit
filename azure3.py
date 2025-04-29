@@ -25,18 +25,19 @@ OUTPUT_PATH = "output/Company_Financials_Synthetic_First5.xlsx"
 
 # 3) Load first 5 rows
 df_full = pd.read_excel(INPUT_PATH)
-df5     = df_full.iloc[:5].reset_index(drop=True)
+df5     = df_full.iloc[:50].reset_index(drop=True)
 print("\n=== INPUT (first 5 rows) ===")
 print(df5)
 
 # 4) Prepare features
-features = df5.drop(columns=["Company","Industry","Sector","Financial Year","Net Income Continuous Operations", 
-                             "Total Revenue", "Stockholders Equity", "Total Assets", "Current Assets", 
-                             "Current Liabilities", "Inventory", "Total Debt","Interest Expense","EBIT"], errors="ignore")
 new_columns = ["Loan Value", "Collateral Value", "Loan Tenure", "Credit Score", "Risk Score"]
 for col in new_columns:
     df5[col] = pd.NA
-print(df5)
+features = df5.drop(columns=["Company","Industry","Sector","Financial Year","Net Income Continuous Operations", 
+                             "Total Revenue", "Stockholders Equity", "Total Assets", "Current Assets", 
+                             "Current Liabilities", "Inventory", "Total Debt","Interest Expense","EBIT"], errors="ignore")
+
+print(features)
 
 str_df = features.to_string()
 
@@ -49,7 +50,7 @@ def parse_json_response(text: str):
         m = re.search(r"\{.*\}", txt, re.DOTALL)
         return json.loads(m.group(0)) if m else None
 
-# 6) Your exact prompt template (braces escaped)
+# 6) Prompt
 prompt_template = f"""
 You are a financial risk expert responsible for evaluating a company's loan risk based on their financial data. Your task is to generate a "Risk Score" that ranges from 0 to 100, where:
 
@@ -122,18 +123,8 @@ You are a financial risk expert responsible for evaluating a company's loan risk
     where the colalteral value is greter than the loan value, the risk score will be 0-10 and vice versa
     if the loan amount is very less than the Total Revenue and Total Assest - risk score will be 0-10 and vice versa
     So give data simiar to these use cases across the features and range.
-
-    Respond strictly with a single valid JSON object without any addictional text,headers or commentary.
-    Respond ONLY with JSON in the following format:
-    
-   [ {{
-    "Loan Value": 10000000,
-    "Collateral Value": 15000000,
-    "Loan Tenure (Months)": 120,
-    "Credit Score": 750,
-    "Risk Score": 20,
-    "Explanation": "The company has strong profitability and moderate debt, leading to a good credit score and low risk."
-    }}]
+     
+   
 """.format(str_df=str_df)
 
 resp = client.chat.completions.create(
@@ -147,7 +138,8 @@ resp = client.chat.completions.create(
     )
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
-
+parsed = parse_json_response(raw)
+syn_df = pd.DataFrame(parsed)
 # 7) LLM call
 # def generate_synthetic(fin_dict):
 #     fin_json = json.dumps(fin_dict, indent=2)
