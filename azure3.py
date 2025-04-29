@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 import warnings
 import re
+from io import StringIO
 
 warnings.filterwarnings("ignore")
 load_dotenv()
@@ -139,65 +140,35 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
 
-parsed = parse_json_response(raw)
-syn_df = pd.DataFrame(parsed)
 
-# 7) Merge & save
-# Merge the synthetic generated columns back into the original df5
-for col in new_columns:
-    if col in syn_df.columns:
-        df5[col] = syn_df[col]
  
-print(df5)
+import pandas as pd
 
-# Save the final DataFrame to an Excel file
-os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-df5.to_excel(OUTPUT_PATH, index=False)
-print(f"\n Saved output to {OUTPUT_PATH}")
-# 7) LLM call
-# def generate_synthetic(fin_dict):
-#     fin_json = json.dumps(fin_dict, indent=2)
-#     prompt = prompt_template.format(financials=fin_json)
-#     resp = client.chat.completions.create(
-#         model    = os.environ["AZURE_OPENAI_DEPLOYMENT"],
-#         messages = [
-#             {"role":"system", "content":"You generate synthetic loan & risk data."},
-#             {"role":"user",   "content":prompt}
-#         ],
-#         temperature=0.6,
-#         max_tokens = 800
-#     )
-#     raw = resp.choices[0].message.content
-#     print(f"[Raw response]\n{raw}")
-#     parsed = parse_json_response(raw)
-#     print(f"[Parsed JSON]\n{parsed}")
-#     return parsed
+import io
+ 
+def string_to_dataframe(data_string, delimiter=',', header=None):
 
-# # 8) Loop & collect
-# synthetic_rows = []
-# for idx, row in features.iterrows():
-#     print(f"\n>>> Processing row {idx}")
-#     res = generate_synthetic(row.to_dict())
-#     if not res:
-#         print(f" Row {idx} failed.")
-#         res = {
-#             "Loan Value": None,
-#             "Collateral Value": None,
-#             "Loan Tenure (Months)": None,
-#             "Loan to Collateral Ratio": None,
-#             "Credit Score": None,
-#             "Risk Score": None,
-#             "Explanation": "Generation failed.",
-#             "Feature Impact Weightage": {}
-#         }
-#     synthetic_rows.append(res)
+    """
 
-# # 9) Merge & save
-# syn_df = pd.DataFrame(synthetic_rows)
-# final = pd.concat([df5, syn_df], axis=1)
-# print("\n=== FINAL MERGED DF ===")
-# print(final)
+    Converts a string to a Pandas DataFrame.
+ 
+    Args:
 
-# os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-# final.to_excel(OUTPUT_PATH, index=False)
-# print(f"\n Saved output to {OUTPUT_PATH}")
+        data_string (str): The string data.
+
+        delimiter (str, optional): The delimiter separating values. Defaults to ','.
+
+        header (list, optional): List of column names. If None, it infers from the first row or assigns default integer indices.
+ 
+    Returns:
+
+        pd.DataFrame: The resulting DataFrame.
+
+    """
+
+    data = io.StringIO(data_string)
+
+    df = pd.read_csv(data, sep=delimiter, header=header)
+
+    return df
+  
