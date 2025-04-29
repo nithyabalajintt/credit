@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 import warnings
 import re
+import io
 from io import StringIO
 
 warnings.filterwarnings("ignore")
@@ -140,10 +141,8 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
 
-# Parse the JSON response
-synthetic_data = parse_json_response(raw)
- 
 
+synthetic_data = parse_json_response(raw)
  
 
 def string_to_dataframe(synthetic_data, delimiter=',', header=None):
@@ -172,6 +171,11 @@ def string_to_dataframe(synthetic_data, delimiter=',', header=None):
 
     return df
 
-# 9) Save updated dataframe to Excel
-df.to_excel(OUTPUT_PATH, index=False)
+# 9) Convert synthetic data to DataFrame using string_to_dataframe function
+df_synthetic = string_to_dataframe(synthetic_data)  
+ 
+# Save updated dataframe to Excel
+df_synthetic.to_excel(OUTPUT_PATH, index=False)  # Saving the DataFrame to Excel
 print(f"Output saved to {OUTPUT_PATH}")
+ 
+
