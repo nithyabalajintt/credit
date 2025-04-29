@@ -140,13 +140,13 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
 
+# Parse the JSON response
+synthetic_data = parse_json_response(raw)
+ 
 
  
-import pandas as pd
 
-import io
- 
-def string_to_dataframe(data_string, delimiter=',', header=None):
+def string_to_dataframe(synthetic_data, delimiter=',', header=None):
 
     """
 
@@ -166,9 +166,12 @@ def string_to_dataframe(data_string, delimiter=',', header=None):
 
     """
 
-    data = io.StringIO(data_string)
+    data = io.StringIO(synthetic_data)
 
     df = pd.read_csv(data, sep=delimiter, header=header)
 
     return df
-  
+
+# 9) Save updated dataframe to Excel
+df.to_excel(OUTPUT_PATH, index=False)
+print(f"Output saved to {OUTPUT_PATH}")
