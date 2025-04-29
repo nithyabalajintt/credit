@@ -25,7 +25,7 @@ OUTPUT_PATH = "output/Company_Financials_Synthetic_First5.xlsx"
 
 # 3) Load first 5 rows
 df_full = pd.read_excel(INPUT_PATH)
-df5     = df_full.iloc[:50].reset_index(drop=True)
+df5     = df_full.iloc[:100].reset_index(drop=True)
 print("\n=== INPUT (first 5 rows) ===")
 print(df5)
 
@@ -138,8 +138,21 @@ resp = client.chat.completions.create(
     )
 raw = resp.choices[0].message.content
 print(f"[Raw response]\n{raw}")
-parsed = parse_json_response(raw)
-syn_df = pd.DataFrame(parsed)
+
+syn_df = pd.DataFrame(raw)
+
+# 7) Merge & save
+# Merge the synthetic generated columns back into the original df5
+for col in str_df:
+    if col in syn_df.columns:
+        df5[col] = syn_df[col]
+ 
+print(df5)
+
+# Save the final DataFrame to an Excel file
+os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+df5.to_excel(OUTPUT_PATH, index=False)
+print(f"\n Saved output to {OUTPUT_PATH}")
 # 7) LLM call
 # def generate_synthetic(fin_dict):
 #     fin_json = json.dumps(fin_dict, indent=2)
