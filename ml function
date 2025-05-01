@@ -1,13 +1,109 @@
-def ml_model(company_name) -> str:
-    """Use this function to get a score and a list of features given by a Machine Learning model
-
-    Args:
-    str: company_name (Name of the company to calculate the risk score for)
-    
-    Returns:
-        json: List of features influencing the score and Model Score
+import yfinance as yf
+import requests
+from rule_decision import rule_function  # You must define this function
+ 
+def search_ticker_by_company_name(company_name):
+    try:
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={company_name}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        results = response.json().get("quotes", [])
         
-    """
-    ml_data = {"company_name": company_name, "features_list": ["Total Debt", "Net Revenue", "Asset Turnover Ratio"], "score": 65.11}
-
-    return json.dumps(ml_data) 
+        for result in results:
+            if result.get("quoteType") in ["EQUITY", "ETF"] and "symbol" in result:
+                return result["symbol"]
+        return None
+    except Exception as e:
+        print(f"Error fetching ticker for '{company_name}': {e}")
+        return None
+ 
+def safe_div(numerator, denominator):
+    try:
+        if denominator == 0 or denominator is None:
+            return None
+        return numerator / denominator
+    except:
+        return None
+ 
+def fetch_fy2024_financial_data(ticker_symbol, loan_value, collateral_value, credit_score):
+    ticker = yf.Ticker(ticker_symbol)
+ 
+    income_stmt = ticker.income_stmt
+    balance_sheet = ticker.balance_sheet
+    cash_flow = ticker.cashflow
+ 
+    if income_stmt.empty or balance_sheet.empty:
+        print("No financial data available.")
+        return None
+ 
+    # Use dates that end in "2024" (fiscal year ending March 31, 2024)
+    fy_2024 = None
+    for col in income_stmt.columns:
+        if "2024" in str(col):
+            fy_2024 = col
+            break
+ 
+    if not fy_2024:
+        print("FY2024 financial data not found.")
+        return None
+ 
+    try:
+        net_income = income_stmt.at['Net Income', fy_2024]
+        total_revenue = income_stmt.at['Total Revenue', fy_2024]
+        ebit = income_stmt.get('EBIT', {}).get(fy_2024, None)
+        interest_exp = income_stmt.get('Interest Expense', {}).get(fy_2024, None)
+ 
+        total_assets = balance_sheet.at['Total Assets', fy_2024]
+        total_liabilities = balance_sheet.at['Total Liab', fy_2024]
+        equity = balance_sheet.at['Total Stockholder Equity', fy_2024]
+        curr_assets = balance_sheet.at['Total Current Assets', fy_2024]
+        curr_liab = balance_sheet.at['Total Current Liabilities', fy_2024]
+ 
+        data = {
+            "Net Profit Margin %": safe_div(net_income, total_revenue) * 100 if total_revenue else None,
+            "Return on Equity %": safe_div(net_income, equity) * 100,
+            "Return on Assets %": safe_div(net_income, total_assets) * 100,
+            "Current Ratio": safe_div(curr_assets, curr_liab),
+            "Asset Turnover Ratio": safe_div(total_revenue, total_assets),
+            "Debt Equity Ratio": safe_div(total_liabilities, equity),
+            "Debt To Asset Ratio": safe_div(total_liabilities, total_assets),
+            "Interest Coverage Ratio": safe_div(ebit, interest_exp),
+            "Loan Value": loan_value,
+            "Collateral Value": collateral_value,
+            "Credit Score": credit_score,
+        }
+ 
+        data["LtC"] = safe_div(loan_value, collateral_value)
+ 
+        return data
+ 
+    except KeyError as e:
+        print(f"Key error in financials: {e}")
+        return None
+ 
+def evaluate_company_risk(company_name, loan_value, collateral_value, credit_score):
+    ticker = search_ticker_by_company_name(company_name)
+    if not ticker:
+        print(f"Ticker not found for company: {company_name}")
+        return
+ 
+    print(f"\nCompany: {company_name} | Ticker: {ticker}")
+    data = fetch_fy2024_financial_data(ticker, loan_value, collateral_value, credit_score)
+    if not data:
+        return
+ 
+    print("Financial Metrics Used for Scoring:")
+    for k, v in data.items():
+        print(f"{k}: {v}")
+    
+    risk_score = rule_function(data)
+    print(f"\nFinal Risk Score: {risk_score}")
+ 
+if __name__ == "__main__":
+    company = input("Enter company name: ").strip()
+    loan = float(input("Enter loan value: "))
+    collateral = float(input("Enter collateral value: "))
+    credit = int(input("Enter credit score (300-900): "))
+    evaluate_company_risk(company, loan, collateral, credit)
+ 
