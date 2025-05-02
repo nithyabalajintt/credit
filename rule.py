@@ -1,84 +1,90 @@
-import yfinance as yf
-import requests
-from rule_decision import rule_function  # Your actual scoring logic
+import pandas as pd
+# import numpy as np
+# import matplotlib.pyplot as plt
  
-# Step 1: Get ticker from company name
-import requests
- 
-def search_ticker_by_company_name(company_name):
-    try:
-        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={company_name}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        results = response.json().get("quotes", [])
+# from sklearn.model_selection import train_test_split, RandomizedSearchCV
+# from sklearn.tree import DecisionTreeRegressor
+# from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+# from sklearn.preprocessing import LabelEncoder
+# from scipy.stats import randint
+from sklearn.preprocessing import MinMaxScaler
+
+
+def rule_function(data):
+    df1 = pd.read_excel("output\Company_Financials_Synthetic_First100.xlsx")
+    # print(data)
+    df2 = pd.DataFrame([data])
+    df = pd.concat([df1,df2], axis = 0)
+    
+    print(df.columns) 
+
+    df = df[["Net Profit Margin %","Return on Equity %", "Return on Assets %", 
+            "Current Ratio", "Asset Turnover Ratio", "Debt Equity Ratio", "Debt To Asset Ratio", 
+            "Interest Coverage Ratio","Loan Value", "Collateral Value", "Credit Score"]]
+
+    df["LtC"] = np.where(df["Collateral Value"] == 0, 
+                     np.nan,  # If Collateral Value is 0, avoid division by 0 and set LtC to NaN
+                     df["Loan Value"] / df["Collateral Value"])
+
+    df = df.drop(columns=["Loan Value", "Collateral Value"])
+
+    # Fill missing values for other columns with median
+    df = df.fillna(df.median(numeric_only=True))
+
+    # copy the data 
+
+    df_min_max_scaled = df.copy()
+    
+    # # apply normalization techniques 
+
+    # for column in df_min_max_scaled.columns: 
+
+    # 	df_min_max_scaled[column] = (1 + (df_min_max_scaled[column] - df_min_max_scaled[column].min())*100) / (df_min_max_scaled[column].max() - df_min_max_scaled[column].min())	
+    
+    # # view normalized data 
+
+    # print(df_min_max_scaled)
+
+    # df_min_max_scaled.to_csv("output\Scaled_Data.csv")
+    
+    #   Normalization
+    scalar = MinMaxScaler()
+    scaled_data = scalar.fit_transform(df_min_max_scaled)
+    #print(scaled_data)
+    scaled_df = pd.DataFrame(scaled_data, columns=df_min_max_scaled.columns)
+    #print(scaled_df)
+    scaled_df = (1 +(100*scaled_df))
+    #print(scaled_df)
+
+    #scaled_df.to_csv("output\Scaled_Data2.csv")
+
+    #Assigning of Weights for the features
+
+    new_columns = ["Financial Risk Score","Repayment Risk Score"]
+    for col in new_columns:
+        scaled_df[col] = pd.NA
         
-        for result in results:
-            if result.get("quoteType") in ["EQUITY", "ETF"] and "symbol" in result:
-                return result["symbol"]
-        return None
-    except Exception as e:
-        print(f"Error fetching ticker for '{company_name}': {e}")
-        return None
-  
-# Step 2: Fetch FY2024 data from yfinance
-def fetch_fy2024_financial_data(ticker_symbol, loan_value, collateral_value, credit_score):
-    ticker = yf.Ticker(ticker_symbol)
-    income_stmt = ticker.financials.T
-    balance_sheet = ticker.balance_sheet.T
- 
-    fy_2024 = None
-    for idx in income_stmt.index:
-        if "2024" in str(idx):
-            fy_2024 = idx
-            break
-    if fy_2024 is None:
-        return None
- 
-    def safe_div(numerator, denominator):
-        try:
-            return numerator / denominator
-        except (KeyError, TypeError, ZeroDivisionError):
-            return None
- 
-    data = {
-        "Net Profit Margin %": safe_div(income_stmt.loc[fy_2024].get('Net Income'), income_stmt.loc[fy_2024].get('Total Revenue')) * 100 if income_stmt.loc[fy_2024].get('Total Revenue') else None,
-        "Return on Equity %": safe_div(income_stmt.loc[fy_2024].get('Net Income'), balance_sheet.loc[fy_2024].get('Total Stockholder Equity')) * 100,
-        "Return on Assets %": safe_div(income_stmt.loc[fy_2024].get('Net Income'), balance_sheet.loc[fy_2024].get('Total Assets')) * 100,
-        "Current Ratio": safe_div(balance_sheet.loc[fy_2024].get('Total Current Assets'), balance_sheet.loc[fy_2024].get('Total Current Liabilities')),
-        "Asset Turnover Ratio": safe_div(income_stmt.loc[fy_2024].get('Total Revenue'), balance_sheet.loc[fy_2024].get('Total Assets')),
-        "Debt Equity Ratio": safe_div(balance_sheet.loc[fy_2024].get('Total Liab'), balance_sheet.loc[fy_2024].get('Total Stockholder Equity')),
-        "Debt To Asset Ratio": safe_div(balance_sheet.loc[fy_2024].get('Total Liab'), balance_sheet.loc[fy_2024].get('Total Assets')),
-        "Interest Coverage Ratio": safe_div(income_stmt.loc[fy_2024].get('EBIT'), income_stmt.loc[fy_2024].get('Interest Expense')),
-        "Loan Value": loan_value,
-        "Collateral Value": collateral_value,
-        "Credit Score": credit_score
-    }
- 
-    return data
- 
-# Step 3: Master evaluation function
-def evaluate_company_risk(company_name, loan_value, collateral_value, credit_score):
-    ticker = search_ticker_by_company_name(company_name)
-    if not ticker:
-        print(f"Ticker not found for company: {company_name}")
-        return
- 
-    print(f"\nCompany: {company_name} | Ticker: {ticker}")
-    data = fetch_fy2024_financial_data(ticker, loan_value, collateral_value, credit_score)
-    if not data:
-        print("FY2024 financial data not found.")
-        return
- 
-    risk_score = rule_function(data)
-    print(f"Final Risk Score: {risk_score}")
- 
-# Step 4: Main function for CLI use
-if __name__ == "__main__":
-    company = input("Enter company name: ")
-    loan = float(input("Enter loan value: "))
-    collateral = float(input("Enter collateral value: "))
-    credit = int(input("Enter credit score: "))
- 
-    evaluate_company_risk(company, loan, collateral, credit)
+
+    dict_fin_weights = {"Net Profit Margin %": 0.25 ,"Return on Equity %":0.25 , "Return on Assets %":0.25, 
+                    "Current Ratio":0.25, "Asset Turnover Ratio":0.1, "Debt Equity Ratio":0.1, "Debt To Asset Ratio":-0.2}
+                    
+    dict_repay_weights = {"Interest Coverage Ratio":0.20, "Credit Score":0.65,"LtC":0.15}
+
+    dict_weights = dict_fin_weights|dict_repay_weights
+
+    for feature, weight in dict_weights.items():
+        scaled_df[feature] = scaled_df[feature]* weight
+
+
+    scaled_df["Financial Risk Score"] = (100 - scaled_df[list(dict_fin_weights.keys())].sum(axis=1))
+    scaled_df["Repayment Risk Score"] = (100 - scaled_df[list(dict_repay_weights.keys())].sum(axis=1))
+    scaled_df["Final Risk Score"] = (scaled_df["Financial Risk Score"]*0.3)+(scaled_df["Repayment Risk Score"]*0.7)
+    #print(scaled_df)
+
+    # Save the updated data back to the Excel file
+    df.to_excel("output/Company_Financials_Synthetic_First100.xlsx", index=False)
+
+
+    scaled_df.to_csv("scaled_data.csv")
+    return scaled_df.iloc[-1,-1]
  
